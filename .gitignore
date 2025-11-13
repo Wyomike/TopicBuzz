@@ -208,3 +208,6 @@ __marimo__/
 
 # Local secrets file
 secrets.json
+
+# database
+my_mastodon_db/
