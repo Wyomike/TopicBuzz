@@ -6,3 +6,4 @@
 | 11-18 | 0:30  | Need to move database to wsl, need to see if that lives on the d drive or not, if not need to free up space on my c drive. |
 spent like an hour some day in here.
 | 12-1 | 4:00 | Finally figured out the WSL environment. Also, my computer is insufficient to cluster 750k docs. As such, we'll use partialfit and online modeling instead. This means we won't discover topics quite as organically, but it'll still do a good job getting most of the topics. We'll work on melding as we go. |
+| 12-2 | 2:00 | I experimented with the clusters made by partial fitting and filtered out inappropriate and non-english topics. The clusters are beginning to look like actual topics! I also assigned a label to each document for a cluster ID. |
