@@ -128,6 +128,7 @@ def main():
                     doc_meta = {
                         "type": "original",
                         "author_user_id": str(post['account']['id']), # The user who posted
+                        "author_handle": str(post['account']['acct']), # FIX FOR FUTURE USE WITH USERNAME
                         "post_timestamp": int(post['created_at'].timestamp()), # Time of the post
                         "language": str(post.get('language'))
                     }
