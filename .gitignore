@@ -208,6 +208,21 @@ __marimo__/
 
 # Local secrets file
 secrets.json
+config.json
 
 # database
 my_mastodon_db/
+chroma_db_storage/
+
+# Models
+lid.176.ftz
+*.pkl
+my_mastodon_model_reduced
+my_online_mastodon_model
+my_mastodon_db_cache.zip
+
+# Generated files
+*.html
+
+# Misc
+utilities.ipynb
