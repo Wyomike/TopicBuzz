@@ -1,3 +1,7 @@
 altair
 pandas
 streamlit
+networkx
+bertopic
+sentence-transformers
+scikit-learn
