@@ -693,12 +693,12 @@ def generate_html(center_node, max_neighbors, depth):
         </div>
         <div class="control-group">
             <span class="label">🕸️ Depth:</span>
-            <input type="range" id="depthSlider" min="1" max="2" value="{depth}" step="1">
+            <input type="range" id="depthSlider" min="1" max="10" value="{depth}" step="1">
             <span id="depthLabel" class="val">{depth}</span>
         </div>
         <div class="control-group">
             <span class="label">🔵 Size:</span>
-            <input type="range" id="sizeSlider" min="50" max="200" value="100">
+            <input type="range" id="sizeSlider" min="10" max="200" value="100">
             <span id="sizeLabel" class="val">100%</span>
         </div>
         <div class="legend">
