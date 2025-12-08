@@ -226,3 +226,8 @@ my_mastodon_db_cache.zip
 
 # Misc
 utilities.ipynb
+migrate.py
+migrate_recent.py
+chroma_db/*
+WIPupdater.py
+chroma_db_data/*
