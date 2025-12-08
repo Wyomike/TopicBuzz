@@ -5,3 +5,5 @@ networkx
 bertopic
 sentence-transformers
 scikit-learn
+pyvis
+supabase
