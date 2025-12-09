@@ -9,3 +9,4 @@
 | 12-3 | 5:00 | Got the streamlit app going, filtered clusters better, have some dataviz, want to expand on the EDA capabilities. |
 | 12-6 | 2:00 | In moving to huggingface I discovered I should probably just use supabase so I'm moving the data to that, it's going pretty smoothly but it's taking a bit. But, the static app is working in huggingface! |
 | 12-7 | 2:15 | Moved the data to supabase, started a cron job for fetching new data, banged my head against supabase free tier data limits, started prototyping a few new functionalities for pages. |
+| 12-8 | 6:30 | Got most of the supabase  stuff figured out, cron should be running and working properly |
