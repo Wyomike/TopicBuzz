@@ -231,3 +231,6 @@ migrate_recent.py
 chroma_db/*
 WIPupdater.py
 chroma_db_data/*
+top1k_mastodon_users.csv
+*.pkl.gz
+*.pkl1.gz

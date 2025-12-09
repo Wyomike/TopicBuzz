@@ -8,6 +8,8 @@ import datetime
 import math
 import os
 
+st.set_page_config(layout="wide", page_title="Live Topic Search")
+
 # --- CONFIGURATION ---
 MAX_NODES = 500  # Safety limit to prevent browser crash on huge results
 TIME_SCALE = 1 / 3600 # For color gradient (Hours)
@@ -19,8 +21,6 @@ if os.path.exists(LABELS_FILE):
     with open(LABELS_FILE, 'r') as f:
         labels_map = json.load(f)
 
-# url = os.environ["SUPABASE_URL"]
-# key = os.environ["SUPABASE_KEY"]
 # --- SETUP SUPABASE ---
 @st.cache_resource
 def init_supabase():
@@ -31,7 +31,6 @@ def init_supabase():
 supabase: Client = init_supabase()
 
 # --- PAGE CONFIG ---
-st.set_page_config(layout="wide", page_title="Live Topic Search")
 st.title("🔎 Live Topic Search")
 st.markdown("Search the **Supabase** database for specific content and visualize the community discussing it.")
 
@@ -72,10 +71,9 @@ def get_time_color(timestamp, max_ts, min_ts):
 if search_query:
     with st.spinner(f"Searching database for '{search_query}'..."):
         # 1. Query Supabase
-        # We assume your table has 'content', 'author_user_id', 'cluster_id', and 'post_timestamp'
         try:
-            response = supabase.table("mastodon_posts") \
-                .select("author_user_id, cluster_id, post_timestamp, content") \
+            response = supabase.table("posts") \
+                .select("author_user_id, post_timestamp, content") \
                 .ilike("content", f"%{search_query}%") \
                 .limit(limit) \
                 .execute()
@@ -89,84 +87,95 @@ if search_query:
         st.warning("No posts found matching that query.")
         st.stop()
 
-    st.success(f"Found {len(data)} posts. Building graph...")
+    st.success(f"Found {len(data)} posts. Building Star Graph...")
 
-    # 2. Build Graph from Query Results
-    G = nx.Graph()
+    # 2. Aggregation (Group by User)
+    # We need to count posts per user to determine edge weight
+    user_stats = {} # { user_id: {'count': int, 'max_ts': int} }
     
-    # Track min/max time for this specific batch for coloring
-    timestamps = [row['post_timestamp'] for row in data if row['post_timestamp']]
-    if timestamps:
-        min_ts = min(timestamps)
-        max_ts = max(timestamps)
+    all_timestamps = []
+
+    for row in data:
+        uid = row['author_user_id']
+        ts = row['post_timestamp'] or 0
+        all_timestamps.append(ts)
+
+        if uid not in user_stats:
+            user_stats[uid] = {'count': 0, 'max_ts': 0}
+        
+        user_stats[uid]['count'] += 1
+        if ts > user_stats[uid]['max_ts']:
+            user_stats[uid]['max_ts'] = ts
+
+    # Calc min/max for coloring
+    if all_timestamps:
+        min_ts = min(all_timestamps)
+        max_ts = max(all_timestamps)
     else:
         min_ts, max_ts = 0, 1
 
-    # Processing loop
-    for row in data:
-        user_id = row['author_user_id']
-        topic_id = row['cluster_id']
-        ts = row['post_timestamp'] or 0
-        
-        if not user_id: continue
-        
-        # Node IDs
-        u_node = f"User_{user_id}"
-        
-        # Handle Topic Node (Use Label if available)
-        if topic_id is not None:
-            raw_t_id = f"Topic_{topic_id}"
-            t_label = labels_map.get(raw_t_id, f"Topic {topic_id}")
-            t_node = raw_t_id
-        else:
-            # If no topic assigned, link to a "Uncategorized" node
-            t_node = "Topic_Unknown"
-            t_label = "Uncategorized"
+    # 3. Build Graph
+    G = nx.Graph()
+    
+    # Create the CENTRAL TOPIC NODE
+    central_id = "CENTER_TOPIC"
+    G.add_node(central_id, 
+               label=search_query.upper(), 
+               title=f"Search Query: {search_query}", 
+               color="#FF4B4B",  # Streamlit Red
+               size=40,
+               shape="star") # Make it stand out
 
-        # Add Nodes
-        if u_node not in G:
-            G.add_node(u_node, label=f"User {user_id}", group="users", title=f"User ID: {user_id}", color="#97C2FC", size=10)
+    # Add User Nodes and Edges
+    for uid, stats in user_stats.items():
+        user_node_id = f"User_{uid}"
+        count = stats['count']
+        last_active_ts = stats['max_ts']
         
-        if t_node not in G:
-            G.add_node(t_node, label=t_label, group="topics", title=t_label, color="#FB7E81", size=25)
+        # Color based on recency
+        edge_color = get_time_color(last_active_ts, max_ts, min_ts)
+        
+        # User Node
+        G.add_node(user_node_id, 
+                   label=f"User {uid}", 
+                   title=f"User {uid}\nPosts: {count}", 
+                   color="#97C2FC", 
+                   size=15)
+        
+        # Edge (User -> Center)
+        # Width/Value scales with post count
+        date_str = datetime.datetime.fromtimestamp(last_active_ts).strftime('%Y-%m-%d %H:%M') if last_active_ts > 0 else "Unknown"
+        edge_title = f"{count} posts about '{search_query}'\nLast active: {date_str}"
+        
+        G.add_edge(central_id, user_node_id, 
+                   value=count, 
+                   title=edge_title, 
+                   color=edge_color)
 
-        # Add/Update Edge
-        if G.has_edge(u_node, t_node):
-            G[u_node][t_node]['weight'] += 1
-            # Keep most recent timestamp
-            if ts > G[u_node][t_node]['ts']:
-                 G[u_node][t_node]['ts'] = ts
-        else:
-            G.add_edge(u_node, t_node, weight=1, ts=ts)
-
-    # 3. Generate PyVis Visualization
+    # 4. Generate PyVis Visualization
     nt = Network(height="700px", width="100%", bgcolor="#222222", font_color="white")
     
-    # Add Nodes
+    # Copy NX nodes to PyVis
     for node_id in G.nodes:
         attr = G.nodes[node_id]
-        nt.add_node(node_id, label=attr['label'], title=attr['title'], color=attr['color'], size=attr['size'])
+        # shape is optional, safely get it
+        shape = attr.get('shape', 'dot') 
+        nt.add_node(node_id, label=attr['label'], title=attr['title'], color=attr['color'], size=attr['size'], shape=shape)
 
-    # Add Edges with Coloring
+    # Copy NX edges to PyVis
     for u, v, d in G.edges(data=True):
-        weight = d['weight']
-        ts = d['ts']
-        color = get_time_color(ts, max_ts, min_ts)
-        
-        date_str = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d') if ts > 0 else "Unknown"
-        title = f"{weight} posts matching '{search_query}'\nLast Active: {date_str}"
-        
-        nt.add_edge(u, v, value=weight, title=title, color=color)
+        nt.add_edge(u, v, value=d['value'], title=d['title'], color=d['color'])
 
-    # Physics Options
+    # Physics Options (Optimized for Star Topology)
     nt.set_options(f"""
     var options = {{
       "physics": {{
         "barnesHut": {{
-          "gravitationalConstant": -8000,
+          "gravitationalConstant": -10000,
+          "centralGravity": 0.3,
           "springLength": {node_spacing},
-          "springConstant": 0.04,
-          "damping": 0.2
+          "springConstant": 0.05,
+          "damping": 0.09
         }},
         "minVelocity": 0.75
       }}
@@ -178,7 +187,7 @@ if search_query:
     components.html(html_data, height=720, scrolling=False)
     
     # Stats
-    st.info(f"Visualizing {G.number_of_nodes()} nodes (Users & Topics) and {G.number_of_edges()} connections based on search results.")
+    st.info(f"Visualizing {len(user_stats)} users discussing '{search_query}'.")
 
 else:
     st.info("👈 Enter a search term in the sidebar to generate a graph from the live database.")
