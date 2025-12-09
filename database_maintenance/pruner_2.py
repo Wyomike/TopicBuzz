@@ -1,5 +1,6 @@
 from tqdm import tqdm
 from supabase import create_client, Client
+import os
 
 # --- Configuration ---
 SECRETS_PATH = "secrets.json"  # Adjust path if needed
