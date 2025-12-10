@@ -8,6 +8,7 @@ import datetime
 import math
 import pandas as pd
 import streamlit.components.v1 as components
+from supabase import create_client, Client
 
 # --- PAGE CONFIG ---
 st.set_page_config(layout="wide", page_title="Topic Buzz Explorer")
@@ -47,69 +48,71 @@ Analyze individual user behavior, their "topic fingerprint," and activity timeli
 CACHE_FILE = "mastodon_network.pkl"
 LABELS_FILE = "topic_labels.json"
 
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+CACHE_FILE = "mastodon_network.pkl"
+BUCKET = "topic_assets"
+
+@st.cache_resource
+def ensure_local_file(filename):
+    """
+    Checks if a file exists locally. If not, attempts to download it 
+    from Supabase Storage and save it to disk.
+    """
+    if os.path.exists(filename):
+        return True
+        
+    print(f"☁️ File {filename} not found locally. Downloading from Supabase...")
+    try:
+        # 1. Get the bytes from Supabase
+        file_bytes = supabase.storage.from_(BUCKET).download(filename)
+        
+        # 2. Save bytes to local disk
+        with open(filename, "wb") as f: # 'wb' = Write Binary
+            f.write(file_bytes)
+            
+        print(f"✅ Downloaded {filename}")
+        return True
+    except Exception as e:
+        st.error(f"❌ Failed to download {filename} from bucket '{BUCKET}': {e}")
+        return False
+
 @st.cache_resource
 def load_data():
     data = {"G": None, "labels": {}, "min_ts": 0, "max_ts": 1}
     
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, 'rb') as f:
-            data["G"] = pickle.load(f)
-            
-        # Pre-calculate Time Range
-        G = data["G"]
-        timestamps = [
-            d['last_timestamp'] 
-            for u, v, d in G.edges(data=True) 
-            if 'last_timestamp' in d and d['last_timestamp'] > 0
-        ]
-        if timestamps:
-            data["min_ts"] = min(timestamps)
-            data["max_ts"] = max(timestamps)
-            
-    if os.path.exists(LABELS_FILE):
-        with open(LABELS_FILE, 'r') as f:
-            data["labels"] = json.load(f)
+    # 1. LOAD GRAPH (Pickle)
+    if ensure_local_file(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'rb') as f:
+                data["G"] = pickle.load(f)
+                
+            # Pre-calculate Time Range
+            G = data["G"]
+            timestamps = [
+                d['last_timestamp'] 
+                for u, v, d in G.edges(data=True) 
+                if 'last_timestamp' in d and d['last_timestamp'] > 0
+            ]
+            if timestamps:
+                data["min_ts"] = min(timestamps)
+                data["max_ts"] = max(timestamps)
+        except Exception as e:
+            st.error(f"Error loading pickle file: {e}")
+
+    # 2. LOAD LABELS (JSON)
+    if ensure_local_file(LABELS_FILE):
+        try:
+            with open(LABELS_FILE, 'r') as f:
+                data["labels"] = json.load(f)
+        except Exception as e:
+            st.warning(f"Could not load labels (check JSON format): {e}")
             
     return data
-# ```
 
-# ### How to create the Multi-Page Structure
-
-# 1.  **Keep `app.py` (above):** This is your "Home" page.
-# 2.  **Create a folder** named `pages` in the same directory.
-# 3.  **Create `pages/1_Graph_Explorer.py`:** Copy your **original** graph logic (the massive script we just built) into this file.
-# 4.  **Create `pages/2_Topic_List.py`:** (Optional) A simple page to list all topics and their keywords.
-
-# **Example Directory Structure:**
-# ```text
-# /topic_buzz/
-# ├── app.py                   # Landing Page
-# ├── mastodon_network.pkl     # Data
-# ├── topic_labels.json        # Data
-# └── pages/
-#     ├── 1_Graph_Explorer.py  # The interactive graph code
-#     └── 2_Topic_List.py      # New simple page
-# ```
-
-# ### Code for `pages/1_Graph_Explorer.py`
-# *(This is just your previous `app.py` code, but you need to import `load_data` from the main app or duplicate the function).*
-
-# It is often cleaner to put the `load_data` function in a separate file (e.g., `utils.py`) and import it in both `app.py` and `pages/1_Graph_Explorer.py` to ensure the cache is shared efficiently.
-
-# **Example `utils.py`:**
-# ```python
-# import streamlit as st
-# import pickle
-# import os
-# import json
-
-# @st.cache_resource
-# def load_data():
-#     # ... (paste the load_data logic here) ...
-#     return data
-# ```
-
-# Then in every page:
-# ```python
-# from utils import load_data
-# data = load_data()
+# Trigger the load immediately so files are ready for other pages
+if __name__ == "__main__":
+    load_data()
