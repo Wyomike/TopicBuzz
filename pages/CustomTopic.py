@@ -3,6 +3,7 @@ import networkx as nx
 from pyvis.network import Network
 import streamlit.components.v1 as components
 from supabase import create_client, Client
+from sentence_transformers import SentenceTransformer
 import json
 import datetime
 import math
@@ -36,8 +37,11 @@ st.markdown("Search the **Supabase** database for specific content and visualize
 
 # --- SIDEBAR INPUTS ---
 st.sidebar.header("Search Parameters")
-search_query = st.sidebar.text_input("Search Content", placeholder="e.g. 'Elon', 'Climate', 'Python'")
-limit = st.sidebar.slider("Max Posts to Fetch", 50, 2000, 500)
+search_query = st.sidebar.text_input("Search Concept", placeholder="e.g. 'Space exploration costs'")
+limit = st.sidebar.slider("Max Posts", 50, 500, 200)
+
+threshold = st.sidebar.slider("Similarity Threshold", 0.0, 1.0, 0.25, 
+                              help="Lower = Broader matches. Higher = More exact.")
 
 # Visual Controls (Embedded in logic later, but setup values here)
 st.sidebar.markdown("---")
@@ -68,19 +72,31 @@ def get_time_color(timestamp, max_ts, min_ts):
 
 # --- MAIN LOGIC ---
 
+print("Loading Embedding Model...")
+model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+
 if search_query:
     with st.spinner(f"Searching database for '{search_query}'..."):
         # 1. Query Supabase
         try:
-            response = supabase.table("posts") \
-                .select("author_user_id, post_timestamp, content") \
-                .ilike("content", f"%{search_query}%") \
-                .limit(limit) \
-                .execute()
+            # 1. Convert User Query to Vector (Numbers)
+            query_vector = model.encode(search_query).tolist()
+
+            # 2. Call the Supabase RPC Function
+            response = supabase.rpc(
+                "match_posts", 
+                {
+                    "query_embedding": query_vector,
+                    "match_threshold": threshold,
+                    "match_count": limit
+                }
+            ).execute()
             
             data = response.data
+            
         except Exception as e:
             st.error(f"Database Error: {e}")
+            st.write("Hint: Did you update the 'match_posts' function in Supabase to handle TEXT IDs and BIGINT timestamps?")
             st.stop()
 
     if not data:

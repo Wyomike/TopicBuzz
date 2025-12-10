@@ -234,3 +234,6 @@ chroma_db_data/*
 top1k_mastodon_users.csv
 *.pkl.gz
 *.pkl1.gz
+*.pkl
+mastodon_network.pkl
+topic_labels.json
